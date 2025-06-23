@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -33,19 +35,45 @@ func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	// Read request
-	buffer := make([]byte, 1024)
-	_, err := conn.Read(buffer)
+	reader := bufio.NewReader(conn)
+
+	requestLine, err := reader.ReadString('\n')
 	if err != nil {
-		fmt.Println("Error reading request in handle connection:", err)
+		fmt.Println("Error reading request:", err)
 		return
 	}
 
-	// Form a response
-	response := "HTTP/1.1 200 OK\r\n" + "Content-Type: text/plain\r\n" + "Content-Length: 13\r\n" + "Connection: close\r\n" + "\r\n" + "Hello World!"
-
-	// send response
-	_, err = conn.Write([]byte(response))
-	if err != nil {
-		fmt.Println("Error sending response:", err)
+	// split the request into parts
+	parts := strings.Split(strings.TrimSpace(requestLine), " ")
+	if len(parts) < 3 {
+		fmt.Println("Invalid request line:", parts)
+		return
 	}
+
+	method := parts[0]
+	url := parts[1]
+
+	var response string
+
+	if method == "GET" && url == "/" {
+		// return 200 ok response
+		body := "Welcome....."
+		response = "HTTP/1.1 200 OK\r\n" +
+			"Content-Type: text/plain\r\n" +
+			fmt.Sprintf("Content-Length: %d\r\n", len(body)) +
+			"Connection: close\r\n" +
+			"\r\n" +
+			body
+	} else {
+		// Return 404 Not Found response
+		body := "Not Found"
+		response = "HTTP/1.1 404 Not Found\r\n" +
+			"Content-Type: text/plain\r\n" +
+			fmt.Sprintf("Content-Length: %d\r\n", len(body)) +
+			"Connection: close\r\n" +
+			"\r\n" +
+			body
+	}
+
+	conn.Write([]byte(response))
 }
