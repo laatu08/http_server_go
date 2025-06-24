@@ -27,7 +27,7 @@ func main() {
 		}
 
 		// handle connection (3-way handshaking)
-		handleConnection(conn)
+		go handleConnection(conn)
 	}
 }
 
@@ -53,11 +53,10 @@ func handleConnection(conn net.Conn) {
 	method := parts[0]
 	url := parts[1]
 
-
 	// Read header
-	headers:=make(map[string]string)
+	headers := make(map[string]string)
 	for {
-		line,err:=reader.ReadString('\n')
+		line, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Println("Error reading headers:", err.Error())
 			return
@@ -68,52 +67,49 @@ func handleConnection(conn net.Conn) {
 			break // End of headers
 		}
 
-		colonIndex:=strings.Index(line,":")
-		if colonIndex!=-1{
-			key:=strings.TrimSpace(line[:colonIndex])
-			value:=strings.TrimSpace(line[colonIndex+1:])
+		colonIndex := strings.Index(line, ":")
+		if colonIndex != -1 {
+			key := strings.TrimSpace(line[:colonIndex])
+			value := strings.TrimSpace(line[colonIndex+1:])
 			headers[strings.ToLower(key)] = value
 		}
 	}
 
-
 	if method == "GET" {
 		if url == "/" {
 			// return 200 ok response
-			writeResponse(conn,200,"Welcome Home...")
-		} else if strings.HasPrefix(url,"/echo/"){
-			echoStr:=strings.TrimPrefix(url,"/echo/")
-			writeResponse(conn,200,echoStr)
-		} else if url=="/user-agent" {
-			userAgent:=headers["user-agent"]
-			writeResponse(conn,200,userAgent)
+			writeResponse(conn, 200, "Welcome Home...")
+		} else if strings.HasPrefix(url, "/echo/") {
+			echoStr := strings.TrimPrefix(url, "/echo/")
+			writeResponse(conn, 200, echoStr)
+		} else if url == "/user-agent" {
+			userAgent := headers["user-agent"]
+			writeResponse(conn, 200, userAgent)
 		} else {
 			// Return 404 Not Found response
-			writeResponse(conn,404,"Not found")
+			writeResponse(conn, 404, "Not found")
 		}
 
 	}
 }
 
-
-func writeResponse(conn net.Conn,statusCode int,body string){
-	statusText:=map[int]string{
-		200:"OK",
-		404:"Not found",
+func writeResponse(conn net.Conn, statusCode int, body string) {
+	statusText := map[int]string{
+		200: "OK",
+		404: "Not found",
 	}[statusCode]
 
 	// build response string
-	response:=fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, statusText) +
+	response := fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, statusText) +
 		"Content-Type: text/plain\r\n" +
 		fmt.Sprintf("Content-Length: %d\r\n", len(body)) +
 		"Connection: close\r\n" +
 		"\r\n" +
 		body
 
-
 	// write to client
-	_,err:=conn.Write([]byte(response))
-	if err!=nil{
-		fmt.Println("Error writing response:",err)
+	_, err := conn.Write([]byte(response))
+	if err != nil {
+		fmt.Println("Error writing response:", err)
 	}
 }
