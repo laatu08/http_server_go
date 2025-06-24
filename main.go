@@ -53,6 +53,30 @@ func handleConnection(conn net.Conn) {
 	method := parts[0]
 	url := parts[1]
 
+
+	// Read header
+	headers:=make(map[string]string)
+	for {
+		line,err:=reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Error reading headers:", err.Error())
+			return
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" {
+			break // End of headers
+		}
+
+		colonIndex:=strings.Index(line,":")
+		if colonIndex!=-1{
+			key:=strings.TrimSpace(line[:colonIndex])
+			value:=strings.TrimSpace(line[colonIndex+1:])
+			headers[strings.ToLower(key)] = value
+		}
+	}
+
+
 	if method == "GET" {
 		if url == "/" {
 			// return 200 ok response
@@ -60,6 +84,9 @@ func handleConnection(conn net.Conn) {
 		} else if strings.HasPrefix(url,"/echo/"){
 			echoStr:=strings.TrimPrefix(url,"/echo/")
 			writeResponse(conn,200,echoStr)
+		} else if url=="/user-agent" {
+			userAgent:=headers["user-agent"]
+			writeResponse(conn,200,userAgent)
 		} else {
 			// Return 404 Not Found response
 			writeResponse(conn,404,"Not found")
