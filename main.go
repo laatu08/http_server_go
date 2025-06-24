@@ -53,27 +53,40 @@ func handleConnection(conn net.Conn) {
 	method := parts[0]
 	url := parts[1]
 
-	var response string
+	if method == "GET" {
+		if url == "/" {
+			// return 200 ok response
+			writeResponse(conn,200,"Welcome Home...")
+		} else if strings.HasPrefix(url,"/echo/"){
+			echoStr:=strings.TrimPrefix(url,"/echo/")
+			writeResponse(conn,200,echoStr)
+		} else {
+			// Return 404 Not Found response
+			writeResponse(conn,404,"Not found")
+		}
 
-	if method == "GET" && url == "/" {
-		// return 200 ok response
-		body := "Welcome....."
-		response = "HTTP/1.1 200 OK\r\n" +
-			"Content-Type: text/plain\r\n" +
-			fmt.Sprintf("Content-Length: %d\r\n", len(body)) +
-			"Connection: close\r\n" +
-			"\r\n" +
-			body
-	} else {
-		// Return 404 Not Found response
-		body := "Not Found"
-		response = "HTTP/1.1 404 Not Found\r\n" +
-			"Content-Type: text/plain\r\n" +
-			fmt.Sprintf("Content-Length: %d\r\n", len(body)) +
-			"Connection: close\r\n" +
-			"\r\n" +
-			body
 	}
+}
 
-	conn.Write([]byte(response))
+
+func writeResponse(conn net.Conn,statusCode int,body string){
+	statusText:=map[int]string{
+		200:"OK",
+		404:"Not found",
+	}[statusCode]
+
+	// build response string
+	response:=fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, statusText) +
+		"Content-Type: text/plain\r\n" +
+		fmt.Sprintf("Content-Length: %d\r\n", len(body)) +
+		"Connection: close\r\n" +
+		"\r\n" +
+		body
+
+
+	// write to client
+	_,err:=conn.Write([]byte(response))
+	if err!=nil{
+		fmt.Println("Error writing response:",err)
+	}
 }
