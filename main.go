@@ -2,13 +2,23 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
+var fileDirectory string
+
 func main() {
+	// parse --directory flag
+	flag.StringVar(&fileDirectory, "directory", ".", "Directory to serve file from")
+	flag.Parse()
+	fmt.Println("Serving from directory:", fileDirectory)
+
 	fmt.Println("Server started...")
 
 	// start http server
@@ -78,22 +88,29 @@ func handleConnection(conn net.Conn) {
 	if method == "GET" {
 		if url == "/" {
 			// return 200 ok response
-			writeResponse(conn, 200, "Welcome Home...")
+			header := "Content-Type: text/plain\r\n"
+			writeResponse(conn, 200, header, "Welcome Home...")
 		} else if strings.HasPrefix(url, "/echo/") {
+			header := "Content-Type: text/plain\r\n"
 			echoStr := strings.TrimPrefix(url, "/echo/")
-			writeResponse(conn, 200, echoStr)
+			writeResponse(conn, 200, header, echoStr)
 		} else if url == "/user-agent" {
+			header := "Content-Type: text/plain\r\n"
 			userAgent := headers["user-agent"]
-			writeResponse(conn, 200, userAgent)
+			writeResponse(conn, 200, header, userAgent)
+		} else if strings.HasPrefix(url, "/files/") {
+			filename := strings.TrimPrefix(url, "/files/")
+			serveFile(conn, filename)
 		} else {
 			// Return 404 Not Found response
-			writeResponse(conn, 404, "Not found")
+			header := "Content-Type: text/plain\r\n"
+			writeResponse(conn, 404, header, "Not found")
 		}
 
 	}
 }
 
-func writeResponse(conn net.Conn, statusCode int, body string) {
+func writeResponse(conn net.Conn, statusCode int, header string, body string) {
 	statusText := map[int]string{
 		200: "OK",
 		404: "Not found",
@@ -101,7 +118,7 @@ func writeResponse(conn net.Conn, statusCode int, body string) {
 
 	// build response string
 	response := fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, statusText) +
-		"Content-Type: text/plain\r\n" +
+		header +
 		fmt.Sprintf("Content-Length: %d\r\n", len(body)) +
 		"Connection: close\r\n" +
 		"\r\n" +
@@ -112,4 +129,20 @@ func writeResponse(conn net.Conn, statusCode int, body string) {
 	if err != nil {
 		fmt.Println("Error writing response:", err)
 	}
+}
+
+func serveFile(conn net.Conn, filename string) {
+	// construct full path
+	fullPath := filepath.Join(fileDirectory, filename)
+
+	// Read file contents
+	data, err := ioutil.ReadFile(fullPath)
+	if err != nil {
+		writeResponse(conn, 404, "", "")
+		return
+	}
+
+	header := "Content-Type: application/octet-stream\r\n"
+
+	writeResponse(conn, 200, header, string(data))
 }
