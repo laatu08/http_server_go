@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -105,11 +107,24 @@ func handleConnection(conn net.Conn) {
 				}
 			}
 
-			if hasGzip {
-				header += "Content-Encoding: gzip\r\n"
-			}
+			var body []byte
+			var err error
+			var message string
 
-			writeResponse(conn, 200, header, echoStr)
+			if hasGzip {
+				body, message = gzipCompress(echoStr)
+				if err != nil {
+					fmt.Println("Compression error:", err)
+					writeResponse(conn, 500, "", "")
+					return
+				}
+				header += "Content-Encoding: gzip\r\n"
+			} else {
+				body = []byte(echoStr)
+			}
+			fmt.Println(body)
+			// writeRawResponse(conn, 200, header, body)
+			writeResponse(conn, 200, header, message)
 		} else if url == "/user-agent" {
 			header := "Content-Type: text/plain\r\n"
 			userAgent := headers["user-agent"]
@@ -155,6 +170,8 @@ func writeResponse(conn net.Conn, statusCode int, header string, body string) {
 	statusText := map[int]string{
 		200: "OK",
 		404: "Not found",
+		201: "Created",
+		500: "Internal Server Error",
 	}[statusCode]
 
 	// build response string
@@ -191,4 +208,64 @@ func serveFile(conn net.Conn, filename string) {
 func writeFile(filename string, data []byte) error {
 	fullpath := filepath.Join(fileDirectory, filename)
 	return os.WriteFile(fullpath, data, 0644)
+}
+
+func writeRawResponse(conn net.Conn, statusCode int, header string, body []byte) {
+	statusText := map[int]string{
+		200: "OK",
+		404: "Not found",
+		201: "Created",
+		500: "Internal Server Error",
+	}[statusCode]
+
+	// build response string
+	fmt.Printf("Sending raw response with length: %d\n", len(body))
+
+	response := fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, statusText) +
+		header +
+		fmt.Sprintf("Content-Length: %d\r\n", len(body)) +
+		"Connection: close\r\n"
+
+	// write headers
+	_, err := conn.Write([]byte(response))
+	if err != nil {
+		fmt.Println("Header write error:", err)
+		return
+	}
+
+	// write raw body
+	// _, err = io.Copy(conn, bytes.NewReader(body))
+	// if err != nil {
+	// 	fmt.Println("Body write error:", err)
+	// }
+
+	written := 0
+	for written < len(body) {
+		n, err := conn.Write(body[written:])
+		if err != nil {
+			fmt.Println("Body write error:", err)
+			return
+		}
+		written += n
+	}
+
+}
+
+func gzipCompress(input string) ([]byte, string) {
+	var buf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buf)
+
+	_, _ = gzipWriter.Write([]byte(input))
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	gzipWriter.Close()
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	gzipMessage := buf.String()
+
+	return buf.Bytes(), gzipMessage
 }
