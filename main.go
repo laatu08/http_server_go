@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -106,7 +107,32 @@ func handleConnection(conn net.Conn) {
 			header := "Content-Type: text/plain\r\n"
 			writeResponse(conn, 404, header, "Not found")
 		}
+	} else if method == "POST" {
+		if strings.HasPrefix(url, "/files/") {
+			filename := strings.TrimPrefix(url, "/files/")
+			contentLength := headers["content-length"]
 
+			length, err := strconv.Atoi(contentLength)
+			if err != nil {
+				writeResponse(conn, 400, "", "Invalid Content-Length")
+				return
+			}
+
+			body := make([]byte, length)
+			_, err = reader.Read(body)
+			if err != nil {
+				writeResponse(conn, 400, "", "Fail to read body")
+				return
+			}
+
+			err = writeFile(filename, body)
+			if err != nil {
+				writeResponse(conn, 500, "", "Failed to write file")
+				return
+			}
+
+			writeResponse(conn,201,"","")
+		}
 	}
 }
 
@@ -145,4 +171,10 @@ func serveFile(conn net.Conn, filename string) {
 	header := "Content-Type: application/octet-stream\r\n"
 
 	writeResponse(conn, 200, header, string(data))
+}
+
+
+func writeFile(filename string,data []byte) error {
+	fullpath:=filepath.Join(fileDirectory,filename)
+	return os.WriteFile(fullpath,data,0644)
 }
