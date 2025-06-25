@@ -94,6 +94,12 @@ func handleConnection(conn net.Conn) {
 		} else if strings.HasPrefix(url, "/echo/") {
 			header := "Content-Type: text/plain\r\n"
 			echoStr := strings.TrimPrefix(url, "/echo/")
+
+			acceptEncoding := headers["accept-encoding"]
+			if strings.Contains(acceptEncoding, "gzip") {
+				header += "Content-Encoding: gzip\r\n"
+			}
+
 			writeResponse(conn, 200, header, echoStr)
 		} else if url == "/user-agent" {
 			header := "Content-Type: text/plain\r\n"
@@ -131,7 +137,7 @@ func handleConnection(conn net.Conn) {
 				return
 			}
 
-			writeResponse(conn,201,"","")
+			writeResponse(conn, 201, "", "")
 		}
 	}
 }
@@ -173,8 +179,7 @@ func serveFile(conn net.Conn, filename string) {
 	writeResponse(conn, 200, header, string(data))
 }
 
-
-func writeFile(filename string,data []byte) error {
-	fullpath:=filepath.Join(fileDirectory,filename)
-	return os.WriteFile(fullpath,data,0644)
+func writeFile(filename string, data []byte) error {
+	fullpath := filepath.Join(fileDirectory, filename)
+	return os.WriteFile(fullpath, data, 0644)
 }
