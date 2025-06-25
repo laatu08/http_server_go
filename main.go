@@ -96,7 +96,16 @@ func handleConnection(conn net.Conn) {
 			echoStr := strings.TrimPrefix(url, "/echo/")
 
 			acceptEncoding := headers["accept-encoding"]
-			if strings.Contains(acceptEncoding, "gzip") {
+			hasGzip := false
+
+			for _, encoding := range strings.Split(acceptEncoding, ",") {
+				if strings.TrimSpace(encoding) == "gzip" {
+					hasGzip = true
+					break
+				}
+			}
+
+			if hasGzip {
 				header += "Content-Encoding: gzip\r\n"
 			}
 
