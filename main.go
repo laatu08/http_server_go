@@ -88,11 +88,17 @@ func handleConnection(conn net.Conn) {
 		}
 	}
 
+	shouldClose := strings.ToLower(headers["connection"]) == "close"
+
 	if method == "GET" {
 		if url == "/" {
 			// return 200 ok response
 			header := "Content-Type: text/plain\r\n"
-			writeResponse(conn, 200, header, "Welcome Home...")
+			var close string
+			if shouldClose {
+				close += "Connection: close\r\n"
+			}
+			writeResponse(conn, 200, header, "Welcome Home...", close)
 		} else if strings.HasPrefix(url, "/echo/") {
 			header := "Content-Type: text/plain\r\n"
 			echoStr := strings.TrimPrefix(url, "/echo/")
@@ -115,27 +121,39 @@ func handleConnection(conn net.Conn) {
 				body, message = gzipCompress(echoStr)
 				if err != nil {
 					fmt.Println("Compression error:", err)
-					writeResponse(conn, 500, "", "")
+					close := "Connection: close\r\n"
+					writeResponse(conn, 500, "", "", close)
 					return
 				}
 				header += "Content-Encoding: gzip\r\n"
 			} else {
-				body = []byte(echoStr)
+				writeResponse(conn, 200, header, echoStr, "")
+			}
+			var close string
+			if shouldClose {
+				close += "Connection: close\r\n"
 			}
 			fmt.Println(body)
 			// writeRawResponse(conn, 200, header, body)
-			writeResponse(conn, 200, header, message)
+			writeResponse(conn, 200, header, message, close)
 		} else if url == "/user-agent" {
 			header := "Content-Type: text/plain\r\n"
 			userAgent := headers["user-agent"]
-			writeResponse(conn, 200, header, userAgent)
+			var close string
+			if shouldClose {
+				close += "Connection: close\r\n"
+			}
+			writeResponse(conn, 200, header, userAgent, close)
 		} else if strings.HasPrefix(url, "/files/") {
 			filename := strings.TrimPrefix(url, "/files/")
 			serveFile(conn, filename)
 		} else {
 			// Return 404 Not Found response
 			header := "Content-Type: text/plain\r\n"
-			writeResponse(conn, 404, header, "Not found")
+
+			close := "Connection: close\r\n"
+
+			writeResponse(conn, 404, header, "Not found", close)
 		}
 	} else if method == "POST" {
 		if strings.HasPrefix(url, "/files/") {
@@ -144,29 +162,36 @@ func handleConnection(conn net.Conn) {
 
 			length, err := strconv.Atoi(contentLength)
 			if err != nil {
-				writeResponse(conn, 400, "", "Invalid Content-Length")
+				close := "Connection: close\r\n"
+				writeResponse(conn, 400, "", "Invalid Content-Length", close)
 				return
 			}
 
 			body := make([]byte, length)
 			_, err = reader.Read(body)
 			if err != nil {
-				writeResponse(conn, 400, "", "Fail to read body")
+				close := "Connection: close\r\n"
+				writeResponse(conn, 400, "", "Fail to read body", close)
 				return
 			}
 
 			err = writeFile(filename, body)
 			if err != nil {
-				writeResponse(conn, 500, "", "Failed to write file")
+				close := "Connection: close\r\n"
+				writeResponse(conn, 500, "", "Failed to write file", close)
 				return
 			}
 
-			writeResponse(conn, 201, "", "")
+			var close string
+			if shouldClose {
+				close += "Connection: close\r\n"
+			}
+			writeResponse(conn, 201, "", "", close)
 		}
 	}
 }
 
-func writeResponse(conn net.Conn, statusCode int, header string, body string) {
+func writeResponse(conn net.Conn, statusCode int, header string, body string, close string) {
 	statusText := map[int]string{
 		200: "OK",
 		404: "Not found",
@@ -177,8 +202,7 @@ func writeResponse(conn net.Conn, statusCode int, header string, body string) {
 	// build response string
 	response := fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, statusText) +
 		header +
-		fmt.Sprintf("Content-Length: %d\r\n", len(body)) +
-		"Connection: close\r\n" +
+		fmt.Sprintf("Content-Length: %d\r\n", len(body)) + close +
 		"\r\n" +
 		body
 
@@ -196,13 +220,14 @@ func serveFile(conn net.Conn, filename string) {
 	// Read file contents
 	data, err := ioutil.ReadFile(fullPath)
 	if err != nil {
-		writeResponse(conn, 404, "", "")
+		close := "Connection: close\r\n"
+		writeResponse(conn, 404, "", "", close)
 		return
 	}
 
 	header := "Content-Type: application/octet-stream\r\n"
 
-	writeResponse(conn, 200, header, string(data))
+	writeResponse(conn, 200, header, string(data), "")
 }
 
 func writeFile(filename string, data []byte) error {
